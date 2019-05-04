@@ -1,0 +1,3 @@
+FROM mariadb
+
+CMD [ "mysqld" ]

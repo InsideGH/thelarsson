@@ -1,22 +1,81 @@
 version: '3.7'
 services:
 
-  web:
+  frontend:
     build:
-      context: ./services/web
+      context: ./services/frontend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "11080:80"
+    extra_hosts:
+      - "cms.local.thelarsson.com:${LOCAL_IP}"
+      - "local.thelarsson.com:${LOCAL_IP}"
     networks:
-      - frontend
+      - frontendVPC
     environment:
       - NODE_ENV=development
     volumes:
-      - ./services/web/site/src:/app/src
-      - ./services/web/site/gatsby-browser.js:/app/gatsby-browser.js
-      - ./services/web/site/gatsby-config.js:/app/gatsby-config.js
-      - ./services/web/site/gatsby-node.js:/app/gatsby-node.js
-      - ./services/web/site/gatsby-ssr.js:/app/gatsby-ssr.js
+      - ./services/frontend/site/src:/app/site/src
+      - ./services/frontend/site/gatsby-browser.js:/app/site/gatsby-browser.js
+      - ./services/frontend/site/gatsby-config.js:/app/site/gatsby-config.js
+      - ./services/frontend/site/gatsby-node.js:/app/site/gatsby-node.js
+      - ./services/frontend/site/gatsby-ssr.js:/app/site/gatsby-ssr.js
+
+  cms_db:
+    build:
+      context: ./services/cms_db
+      dockerfile: Dockerfile
+    ports:
+      - 3306:3306
+    networks:
+      - frontendVPC
+    volumes:
+      - cms_db:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: exampleuser
+      MYSQL_PASSWORD: examplepass
+      MYSQL_ROOT_PASSWORD: '1'
+    restart: always
+
+  cms:
+    image: wordpress:5.1.1
+    ports:
+      - 8080:80
+    networks:
+      - frontendVPC
+    environment:
+      WORDPRESS_DB_HOST: cms_db
+      WORDPRESS_DB_USER: exampleuser
+      WORDPRESS_DB_PASSWORD: examplepass
+      WORDPRESS_DB_NAME: wordpress
+    depends_on:
+      - cms_db
+    # volumes:
+    #   - ./services/wordpress/src/wp-content/themes:/var/www/html/wp-content/themes
+    #   - ./services/wordpress/src/wp-content/plugins:/var/www/html/wp-content/plugins
+    restart: always
+
+  proxy:
+    build:
+      context: ./services/proxy
+      dockerfile: Dockerfile
+    ports:
+      - 80:80
+    networks:
+      - frontendVPC
+    volumes:
+      - ./services/proxy/nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
 
 networks:
-  frontend:
+  frontendVPC:
+
+volumes:
+  cms_db:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/services/data/cms_db
+      o: bind
